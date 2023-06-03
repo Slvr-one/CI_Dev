@@ -1,0 +1,24 @@
+controller:
+  image: "839821061981.dkr.ecr.eu-central-1.amazonaws.com/jenkins"
+  tag: "1.1.0"
+  imagePullSecretName: registry-secret
+  # installPlugins: false
+
+  JCasC:
+    configScripts:
+      jenkins-url: |
+        unclassified:
+          location:
+            url: http://localhost:8080
+            adminAddress: dviross@outlook.com
+    securityRealm: |-
+      local:
+        allowsSignup: false
+        enableCaptcha: false
+        users:
+        - id: "dviross"
+          name: "dviross"
+          password: "Aa123456"
+    authorizationStrategy: |-
+      loggedInUsersCanDoAnything:
+        allowAnonymousRead: false

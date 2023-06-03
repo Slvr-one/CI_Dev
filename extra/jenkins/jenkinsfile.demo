@@ -1,0 +1,101 @@
+pipeline {
+    agent any
+    stages {
+        stage("4 - tag") {
+            when { branch "release/*" }
+            steps {
+                echo "---- tagging for ${BRANCH_NAME} branch ----"
+                sshagent(['jenkins_gitlab']) {
+                    sh "git fetch -t || true"
+                }
+                script {
+                    VER = BRANCH_NAME.split('\\/')[1]
+                    RELEASE = sh(script: "git tag -l --sort=v:refname \"${VER}.*\" | tail -1", returnStdout: true).trim()
+                    if (RELEASE.isEmpty()) {
+                        PATCH = ".0"
+                        CURRENT_VERSION = VER + PATCH
+                    } else {
+                        CURRENT_VERSION = RELEASE.split('\\.')
+                        CURRENT_VERSION[2] = CURRENT_VERSION[2].toInteger() + 1
+                        CURRENT_VERSION = CURRENT_VERSION.join('.') //for future ref
+                    }
+                    sh """
+                        docker tag $PROJECT:latest $PROJECT:$CURRENT_VERSION    
+                    """
+                    sh "git clean -xf && git tag $CURRENT_VERSION"
+                    sshagent(['gitlab_get']) {
+                        sh "git push --tags"
+                    }
+                    sh "yq - i '.App.imageTag = \"$CURRENT_VERSION\"' ./app/values.yaml"
+                    //argo shold notice a change in app git repo, which he listen for, and apply changes to cd.
+                }
+            }
+        }
+        stage("5 - publish") {
+            when {
+                expression { BRANCH_NAME =~  "release/*"} }
+
+            }
+            steps {
+                echo "---- publish to ecr ----"
+                script {
+                    docker.withRegistry("http://${ECR_URL}", "ecr:${AWS_REGION}:jenkins-access-key") {
+                        docker.image("${PROJECT}").push("${CURRENT_VERSION}")  //tag CURRENT_VERSION sem version
+                        docker.image("${PROJECT}").push('latest')  // update tag "latest"
+                        
+                        GIT_COMMIT_HASH = sh (script: "git log -n 1 --pretty=format:'%H'", returnStdout: true)
+                        SHORT_COMMIT = "${GIT_COMMIT_HASH[0..7]}"
+                        docker.withRegistry('https://registry.hub.docker.com', 'dockerHubCredentials') {
+                            app.push("$SHORT_COMMIT")
+                            app.push("latest")
+                    }
+                }              
+            }
+        }
+        stage("5 - provision & publish") {
+            when {
+                expression { 
+                    BRANCH_NAME == "main" || BRANCH_NAME =~ "feature/*" && changelog '.*^\\[#e2e\\] .+$' 
+                }
+                anyOf {
+                    expression { BRANCH_NAME == "main" }
+                    expression { BRANCH_NAME =~ "feature/*" && MSG == '0'} //enhanced = "${COMMIT}".contains("#test")
+                }
+                expression {PROVISION == '0' && BRANCH_NAME != "main" } 
+            }
+            steps {
+                script {
+                    sh "yq -i \'services.bm.ports[0]=5000:5000\' docker-compose.yaml"
+                    sh "yq -i \'services.static.ports[0]=\"80:80\"\' docker-compose.yaml"
+                    sh "sed -i \'/^\$/d\' docker-compose.yam" //delete empty lines
+                dir("tf") {
+                    WORKSPACES = sh(script: "tf workspace list | awk '\"*\" {print \$2}'", returnStdout: true).trim()
+                    APPLY_PLAN = "plan_" + BRANCH_NAME + "_apply_" + BUILD_NUMBER
+                    DESTROY_PLAN = "plan_" + BRANCH_NAME + "_destroy_" + BUILD_NUMBER
+                    if ([WORKSPACES].contains(BRANCH_NAME) ){
+                        sh "terraform workspace select $BRANCH_NAME"
+                    } else {
+                        sh "terraform workspace new $BRANCH_NAME"
+                    }
+                    sh "terraform init"
+                    sh "terraform plan -var-file=$BRANCH_NAME\".tfvars\" -out $APPLY_PLAN"
+                    sh "terraform apply -auto-approve $APPLY_PLAN" //coresponding env file to workspace/branch and to current build
+                    sh "rm -rf $APPLY_PLAN"
+                    sh "terraform plan -destroy -var-file=$BRANCH_NAME\".tfvars\" -out $DESTROY_PLAN"
+                    DYNAMIC_IP = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
+                    }
+                }
+            }
+        }
+        stage("7 - sweeper") {
+            steps {
+                sh "./tests/E2E-tests.sh $SERVER $RET $NGINX_PORT"
+
+                script {
+                    BM_INSTANCE_ID = sh(script: "terraform output -raw prod_instanc_id", returnStdout: true).trim()
+                    UP_TIME = sh(script: "aws ec2 describe-instances --instance-ids $BM_INSTANCE_ID --query \"Reservations[].Instances[].[LaunchTime]\" | awk -F '+' '{print \$1}' | awk -F 'T' '{print \$2}'", returnStdout: true).trim()
+                }
+            }
+        }
+    }
+}

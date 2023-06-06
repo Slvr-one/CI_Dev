@@ -1,0 +1,56 @@
+ace-editor
+cloudbees-aws-credentials 191.vcb_f183ce58b_9
+green-balls 1.15.1
+ant
+antisamy-markup-formatter
+build-timeout 1.24
+cloudbees-folder
+configuration-as-code
+credentials-binding 523.vd859a_4b_122e6
+credentials
+credentials-binding
+display-url-api
+docker-commons
+docker-workflow
+email-ext 2.92
+folders 6.773.vd2dcc704ee7e
+git-changelog 1.45
+git-server latest
+git 4.13.0
+git-client 3.13.0
+gitlab 1.5.36
+gitlab-merge-request-jenkins
+gitlab-oauth
+gitlab-plugin
+github-branch-source
+gradle
+junit 1156.vcf492e95a_a_b_0
+ldap 2.12
+mailer 438.v02c7f0a_12fa_4
+matrix-auth
+matrix-authorization-strategy 3.1.5
+maven-plugin
+pam-auth
+pipeline 590.v6a_d052e5a_a_b_5
+pipeline-basic-steps 994.vd57e3ca_46d24
+pipeline-build-step latest
+pipeline-graph-analysis latest
+pipeline-input-step latest
+pipeline-milestone-step latest
+pipeline-model-api 1.0.2
+pipeline-model-declarative-agent 1.0.2
+pipeline-model-definition 1.0.2
+pipeline-githubnotify-step
+pipeline-github-lib
+pipeline-rest-api
+pipeline-stage-step
+pipeline-stage-tags-metadata
+pipeline-stage-view
+pipeline-utility-steps
+plain-credentials
+ssh-agent
+ssh-credentials
+ssh-slaves
+timestamper
+workflow-aggregator
+ws-cleanup
